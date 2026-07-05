@@ -1,0 +1,403 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>😭</text></svg>" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>今天你emo了吗？ - EMO RETRO ARCADE</title>
+    <!-- 引入 Fusion Pixel Font Simplified Chinese 字体 (中文像素) -->
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@fontsource/fusion-pixel-12px-monospaced-sc@latest/index.css" />
+    <!-- 引入 Press Start 2P (英文展示标题像素字) -->
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@fontsource/press-start-2p@latest/400.css" />
+    <!-- 引入 VT323 (CRT 终端等宽英文字) -->
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@fontsource/vt323@latest/400.css" />
+    <!-- 引入 Font Awesome 矢量图标 -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" />
+  </head>
+  <body>
+    <!-- 交互式 Emoji 流星雨 Canvas 背景 -->
+    <canvas id="meteor-canvas"></canvas>
+
+    <!-- 扫描线/网格背景装饰 -->
+    <div class="grid-overlay"></div>
+
+    <!-- 噪点纹理叠加层 (CRT 颗粒感) -->
+    <div class="noise-overlay"></div>
+
+    <!-- 屏幕渐晕暗角层 (CRT 显像管曲面感) -->
+    <div class="vignette-overlay"></div>
+
+    <!-- CRT 电视/显示器效果容器 -->
+    <div class="crt-frame">
+      <div class="crt-screen">
+        <div class="crt-bezel"></div>
+        <div class="crt-glass"></div>
+        <div class="crt-scanlines"></div>
+        
+        <!-- 街机状态栏 -->
+        <header class="arcade-header">
+          <div class="sys-title"><i class="fa-solid fa-gamepad fa-bounce"></i> EMO-ARCADE SYSTEM v1.2</div>
+          <div class="sys-indicators">
+            <span class="indicator green" id="ind-power">POWER: ON</span>
+            <span class="indicator red flash" id="ind-mode">MODE: NORMAL</span>
+          </div>
+          <div class="sys-audio" id="audio-toggle">
+            <i class="fa-solid fa-volume-xmark" id="audio-icon"></i> <span id="audio-text">SOUND OFF</span>
+          </div>
+        </header>
+
+        <!-- 主终端区 -->
+        <main class="terminal-main">
+          <div class="console-box" id="console-box">
+            <!-- 阶段一：打字问答 -->
+            <div id="stage-ask" class="stage-view active">
+              <div class="typing-container">
+                <span class="pixel-text" id="typing-text"></span>
+                <span class="pixel-cursor"></span>
+              </div>
+
+              <div class="buttons-container hide" id="ask-buttons">
+                <button class="btn btn-yes" id="btn-yes">
+                  <span class="btn-border"></span>
+                  <span class="btn-text">是的，emo惨了 😭</span>
+                </button>
+                <button class="btn btn-no" id="btn-no">
+                  <span class="btn-border"></span>
+                  <span class="btn-text">没有，开心得很 😄</span>
+                </button>
+              </div>
+            </div>
+
+            <!-- 阶段二：两张卡片选择页 (照相馆 VS 摄影机) -->
+            <div id="stage-select" class="stage-view">
+              <div class="capsule-buttons">
+                <div class="capsule-btn capsule-studio" id="card-goto-studio">
+                  <div class="capsule-icon"><i class="fa-solid fa-camera-retro"></i></div>
+                  <div class="capsule-content">
+                    <div class="capsule-title">情绪照相馆</div>
+                    <div class="capsule-desc">定格瞬间泪花，订制专属 Emo 表情包</div>
+                  </div>
+                  <div class="capsule-arrow">→</div>
+                </div>
+                <div class="capsule-btn capsule-camera" id="card-goto-camera">
+                  <div class="capsule-icon"><i class="fa-solid fa-video"></i></div>
+                  <div class="capsule-content">
+                    <div class="capsule-title">情绪摄影机</div>
+                    <div class="capsule-desc">掌控时间旅程，生成专属角色卡</div>
+                  </div>
+                  <div class="capsule-arrow">→</div>
+                </div>
+              </div>
+            </div>
+
+            <!-- 阶段三：情绪照相馆 (Polaroid 相机) -->
+            <div id="stage-studio" class="stage-view">
+              <div class="studio-layout">
+                <!-- 主体区：拍立得 + 情绪占比 各占50% -->
+                <div class="studio-main-row">
+                  <!-- 左侧：拍立得 (50%) -->
+                  <div class="studio-polaroid-col">
+                    <!-- 拍立得相框 -->
+                    <div class="polaroid-frame" id="polaroid-frame">
+                      <div class="polaroid-screen-wrapper">
+                        <video id="studio-video" autoplay playsinline muted></video>
+                        <!-- 拍照冻结与贴纸绘制 Canvas -->
+                        <canvas id="studio-canvas"></canvas>
+                      </div>
+                      <div class="polaroid-footer">
+                        <input type="text" id="polaroid-caption" placeholder="留下你此刻的矫情语录..." maxlength="20" />
+                      </div>
+                    </div>
+
+                    <!-- 贴纸托盘 (拍照后开启) -->
+                    <div class="sticker-tray-container" id="sticker-tray-section">
+                      <div class="tray-label">点击添加像素贴纸 (可拖拽/缩放):</div>
+                      <div class="sticker-tray">
+                        <span class="sticker-item" data-sticker="😭">😭</span>
+                        <span class="sticker-item" data-sticker="💔">💔</span>
+                        <span class="sticker-item" data-sticker="🕶️">🕶️</span>
+                        <span class="sticker-item" data-sticker="🤡">🤡</span>
+                        <span class="sticker-item" data-sticker="💦">💦</span>
+                        <span class="sticker-item" data-sticker="🩹">🩹</span>
+                        <span class="sticker-item" data-sticker="💤">💤</span>
+                      </div>
+                    </div>
+                  </div>
+
+                  <!-- 右侧：情绪占比 (50%) -->
+                  <div class="studio-emotion-col">
+                    <!-- 小精灵表情 -->
+                    <div class="studio-sprite-box">
+                      <canvas id="studio-sprite-canvas"></canvas>
+                    </div>
+
+                    <!-- 情绪占比面板 -->
+                    <div class="emotion-stats-panel">
+                    <div class="stats-header">📊 情绪占比</div>
+                    <div class="emotion-bar-list">
+                      <div class="emotion-bar-row" data-emotion="happy">
+                        <span class="emo-icon">😊</span>
+                        <span class="emo-label">开心</span>
+                        <div class="emo-bar-bg"><div class="emo-bar-fill" id="bar-happy" style="width: 0%; background: #10b981;"></div></div>
+                        <span class="emo-val" id="val-happy">0%</span>
+                      </div>
+                      <div class="emotion-bar-row" data-emotion="sad">
+                        <span class="emo-icon">😢</span>
+                        <span class="emo-label">悲伤</span>
+                        <div class="emo-bar-bg"><div class="emo-bar-fill" id="bar-sad" style="width: 0%; background: #3b82f6;"></div></div>
+                        <span class="emo-val" id="val-sad">0%</span>
+                      </div>
+                      <div class="emotion-bar-row" data-emotion="angry">
+                        <span class="emo-icon">😠</span>
+                        <span class="emo-label">愤怒</span>
+                        <div class="emo-bar-bg"><div class="emo-bar-fill" id="bar-angry" style="width: 0%; background: #ef4444;"></div></div>
+                        <span class="emo-val" id="val-angry">0%</span>
+                      </div>
+                      <div class="emotion-bar-row" data-emotion="surprise">
+                        <span class="emo-icon">😲</span>
+                        <span class="emo-label">惊讶</span>
+                        <div class="emo-bar-bg"><div class="emo-bar-fill" id="bar-surprise" style="width: 0%; background: #f59e0b;"></div></div>
+                        <span class="emo-val" id="val-surprise">0%</span>
+                      </div>
+                      <div class="emotion-bar-row" data-emotion="fear">
+                        <span class="emo-icon">😨</span>
+                        <span class="emo-label">恐惧</span>
+                        <div class="emo-bar-bg"><div class="emo-bar-fill" id="bar-fear" style="width: 0%; background: #8b5cf6;"></div></div>
+                        <span class="emo-val" id="val-fear">0%</span>
+                      </div>
+                      <div class="emotion-bar-row" data-emotion="disgust">
+                        <span class="emo-icon">🤢</span>
+                        <span class="emo-label">厌恶</span>
+                        <div class="emo-bar-bg"><div class="emo-bar-fill" id="bar-disgust" style="width: 0%; background: #a855f7;"></div></div>
+                        <span class="emo-val" id="val-disgust">0%</span>
+                      </div>
+                      <div class="emotion-bar-row" data-emotion="neutral">
+                        <span class="emo-icon">😐</span>
+                        <span class="emo-label">中性</span>
+                        <div class="emo-bar-bg"><div class="emo-bar-fill" id="bar-neutral" style="width: 0%; background: #6b7280;"></div></div>
+                        <span class="emo-val" id="val-neutral">0%</span>
+                      </div>
+                    </div>
+                  </div>
+                  </div>
+                </div>
+
+                <!-- 底部：横排按钮 -->
+                <div class="studio-bottom-bar">
+                  <button class="btn btn-ctrl btn-ctrl-compact" id="btn-studio-camera-toggle">
+                    <span class="btn-border"></span>
+                    <span class="btn-text"><i class="fa-solid fa-power-off"></i> 启动摄像头</span>
+                  </button>
+                  <button class="btn btn-ctrl btn-yes btn-ctrl-compact" id="btn-studio-snap">
+                    <span class="btn-border"></span>
+                    <span class="btn-text"><i class="fa-solid fa-camera"></i> 按下快门</span>
+                  </button>
+                  <button class="btn btn-ctrl btn-ctrl-compact" id="btn-studio-toggle-mesh">
+                    <span class="btn-border"></span>
+                    <span class="btn-text"><i class="fa-solid fa-grid-2"></i> 显示网格</span>
+                  </button>
+                  <button class="btn btn-ctrl btn-success btn-ctrl-compact" id="btn-studio-download">
+                    <span class="btn-border"></span>
+                    <span class="btn-text"><i class="fa-solid fa-download"></i> 导出表情包</span>
+                  </button>
+                  <button class="btn btn-ctrl btn-back btn-ctrl-compact" id="btn-studio-back">
+                    <span class="btn-border"></span>
+                    <span class="btn-text">返回主舱 ◀️</span>
+                  </button>
+                </div>
+              </div>
+            </div>
+
+            <!-- 阶段四：情绪摄影机 -->
+            <div id="stage-camera" class="stage-view">
+              <!-- 主内容区 -->
+              <div class="camera-main">
+                <!-- 左侧：摄像头 + AI 精灵 -->
+                <div class="camera-left">
+                  <!-- 上行：摄像头 + AI -->
+                  <div class="camera-top-row">
+                    <!-- 摄像头区域 -->
+                    <div class="camera-video-box">
+                      <div class="cam-rec-indicator"><span id="hud-rec-indicator"><i class="fa-solid fa-circle" style="color: #ef4444;"></i> REC</span></div>
+                      <div class="ml-video-wrapper">
+                        <video id="vhs-video" autoplay playsinline muted></video>
+                        <canvas id="vhs-overlay"></canvas>
+                        <div class="bracket br-tl"></div><div class="bracket br-tr"></div>
+                        <div class="bracket br-bl"></div><div class="bracket br-br"></div>
+                      </div>
+                      <div class="ml-emotion-result">
+                        <div class="emo-name" id="mock-emotion-tag">😃 Happy</div>
+                        <div class="emo-prob" id="mock-emotion-prob">76% <i class="fa-solid fa-heart"></i></div>
+                      </div>
+                      <div class="ml-waveform" id="ml-waveform"></div>
+                    </div>
+
+                    <!-- AI 精灵区域 -->
+                    <div class="camera-ai-box">
+                      <div class="ai-dialogue" id="ai-dialogue-bubble">
+                        你今天好开心呀！<br/>继续保持哦！💖
+                      </div>
+                      <div class="ai-character-area">
+                        <div class="sprite-combo-popup" id="sprite-combo-popup">
+                          <span class="combo-popup-emoji" id="combo-popup-emoji">😄</span>
+                          <span class="combo-popup-text" id="combo-popup-text">Combo!</span>
+                          <span class="combo-popup-energy" id="combo-popup-energy">✨ +5</span>
+                        </div>
+                        <div class="ai-avatar" id="ai-avatar"><canvas id="pixel-sprite-canvas"></canvas></div>
+                      </div>
+                    </div>
+                  </div>
+
+                  <!-- 下行：情绪时序分析 -->
+                  <div class="camera-chart-box" id="emotion-chart-area">
+                    <canvas id="emotion-chart-canvas"></canvas>
+                  </div>
+                </div>
+
+                <!-- 右侧：控制面板 & 角色卡 -->
+                <div class="camera-right" id="ml-right-col">
+                  <!-- 初始状态的控制按钮 -->
+                  <div id="ml-explore-controls" style="display: flex; flex-direction: column; align-items: center; justify-content: center; height: 100%; width: 100%; text-align: center;">
+                      <div class="ctrl-robot-icon">
+                        <i class="fa-solid fa-wand-magic-sparkles"></i>
+                      </div>
+                      <div class="ctrl-title">MindLens 心镜</div>
+                      <div class="ctrl-desc">捕捉你的情绪瞬间<br/>生成专属角色卡</div>
+                      <button class="btn btn-ctrl btn-ctrl-start" id="btn-vhs-camera-toggle">
+                        <span class="btn-border"></span>
+                        <span class="btn-text"><i class="fa-solid fa-play"></i> 启动情绪摄影机</span>
+                      </button>
+                      <button class="btn btn-ctrl btn-ctrl-back" id="btn-vhs-back">
+                        <span class="btn-border"></span>
+                        <span class="btn-text"><i class="fa-solid fa-house"></i> 返回主仓</span>
+                      </button>
+                  </div>
+
+                  <!-- 运行中的控制按钮区 -->
+                  <div id="ml-running-controls" class="hide" style="display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 8px; width: 100%; height: 100%;">
+                      <div class="running-buttons">
+                        <button class="btn btn-ctrl btn-ctrl-restart" id="btn-vhs-restart">
+                          <span class="btn-border" style="border-color: var(--color-cyan);"></span>
+                          <span class="btn-text"><i class="fa-solid fa-rotate-right"></i> 重启</span>
+                        </button>
+                        <button class="btn btn-ctrl btn-ctrl-finish" id="btn-vhs-finish">
+                          <span class="btn-border" style="border-color: var(--color-pink);"></span>
+                          <span class="btn-text"><i class="fa-solid fa-stop"></i> 结束</span>
+                        </button>
+                      </div>
+                      <div class="running-status">
+                        <i class="fa-solid fa-circle text-red flash"></i>
+                        <span>情绪识别中...</span>
+                      </div>
+                      <div class="running-timer" id="running-timer">00:00</div>
+                      <div class="running-buttons">
+                        <button class="btn btn-ctrl btn-ctrl-mesh" id="btn-vhs-mesh-toggle">
+                          <span class="btn-border" style="border-color: var(--color-yellow);"></span>
+                          <span class="btn-text"><i class="fa-solid fa-grid-3x3"></i> 隐藏网格</span>
+                        </button>
+                      </div>
+                  </div>
+
+                  <!-- 结算状态：按钮在上，角色卡在下 -->
+                  <div id="ml-card-content" class="hide" style="width: 100%; height: 100%; display: flex; flex-direction: column; gap: 6px;">
+                      <!-- 上方：按钮区 -->
+                      <div class="result-buttons-area">
+                        <div class="running-status">
+                          <i class="fa-solid fa-circle-check" style="color: var(--color-green);"></i>
+                          <span>分析完成</span>
+                        </div>
+                        <div class="running-timer" id="result-timer">00:00</div>
+                        <div class="running-buttons">
+                          <button class="btn btn-ctrl btn-ctrl-restart" id="btn-vhs-restart-result">
+                            <span class="btn-border" style="border-color: var(--color-cyan);"></span>
+                            <span class="btn-text"><i class="fa-solid fa-rotate-right"></i> 重启</span>
+                          </button>
+                          <button class="btn btn-ctrl btn-ctrl-finish" id="btn-vhs-back-result">
+                            <span class="btn-border" style="border-color: var(--color-pink);"></span>
+                            <span class="btn-text"><i class="fa-solid fa-house"></i> 返回</span>
+                          </button>
+                        </div>
+                      </div>
+
+                      <!-- 下方：角色卡区 -->
+                      <div class="result-card-area" style="flex: 1; display: flex; flex-direction: column; align-items: center; overflow-y: auto; min-height: 0;">
+                      <div class="card-header">✨ 分析完成！ ✨</div>
+                      <div class="card-ribbon">情绪角色卡</div>
+                      <div class="card-role-icon" id="role-icon">☀️</div>
+                      <div class="card-role-label">今日情绪角色</div>
+                      <div class="card-role-name" id="role-name">小太阳</div>
+                      
+                      <div class="card-stats">
+                        <div class="stat-row"><span>快乐值</span><span id="role-energy-text" style="color: var(--color-pink);">87%</span></div>
+                        <div class="stat-row"><span>连击次数</span><span id="role-level-text" style="color: var(--color-cyan);">12次</span></div>
+                        <div class="stat-row" style="flex-direction: column; align-items: flex-start; gap: 8px;">
+                          <span style="font-size: 14px; color: #aaa;">情绪分布</span>
+                          <div id="role-emotion-dist" style="display: flex; gap: 10px; font-size: 14px; color: #ddd; flex-direction: column; margin-left: 10px;">
+                            <div><span style="display: inline-block; width: 24px; text-align: center; margin-right: 5px;">😃</span>开心 ×<span id="dist-happy">0</span></div>
+                            <div><span style="display: inline-block; width: 24px; text-align: center; margin-right: 5px;">😐</span>平静 ×<span id="dist-neutral">0</span></div>
+                            <div><span style="display: inline-block; width: 24px; text-align: center; margin-right: 5px;">😢</span>悲伤 ×<span id="dist-sad">0</span></div>
+                            <div><span style="display: inline-block; width: 24px; text-align: center; margin-right: 5px;">😲</span>惊讶 ×<span id="dist-surprise">0</span></div>
+                            <div><span style="display: inline-block; width: 24px; text-align: center; margin-right: 5px;">😠</span>愤怒 ×<span id="dist-angry">0</span></div>
+                            <div><span style="display: inline-block; width: 24px; text-align: center; margin-right: 5px;">😨</span>恐惧 ×<span id="dist-fear">0</span></div>
+                            <div><span style="display: inline-block; width: 24px; text-align: center; margin-right: 5px;">🤢</span>厌恶 ×<span id="dist-disgust">0</span></div>
+                          </div>
+                        </div>
+                      </div>
+                      
+                      <div class="result-bottom-row" style="display: flex; width: 100%; justify-content: space-between; align-items: center; gap: 12px; margin-top: auto;">
+                        <button class="btn btn-ctrl" id="btn-close-role-card" style="margin: 0; flex: 1;">
+                          <span class="btn-border" style="border-color: var(--color-yellow);"></span>
+                          <span class="btn-text"><i class="fa-solid fa-camera"></i> 生成分享卡片</span>
+                        </button>
+                        <div class="qr-code-box" style="width: 55px; height: 55px; background: #221001; border: 2px solid var(--color-cyan); padding: 4px; display: flex; align-items: center; justify-content: center;">
+                          <i class="fa-solid fa-qrcode" style="font-size: 36px; color: var(--color-cyan);"></i>
+                        </div>
+                      </div>
+                      </div>
+                  </div>
+                </div>
+              </div>
+
+              <!-- AI 建议弹窗 -->
+              <div class="ai-modal-overlay" id="ai-suggestion-modal">
+                <div class="ai-modal-container">
+                  <div class="ai-modal-header">
+                    <div class="ai-modal-title">🤖 AI 情绪观察顾问</div>
+                    <button class="ai-modal-close" id="btn-close-ai-modal">&times;</button>
+                  </div>
+                  <div class="ai-modal-body" id="ai-modal-body-content">
+                    <!-- 动态加载内容 -->
+                  </div>
+                  <div class="ai-modal-footer">
+                    <button class="btn btn-ctrl btn-ai-modal-ok" id="btn-ai-modal-ok" style="width: auto; margin-bottom: 0;">
+                      <span class="btn-border" style="border-color: var(--color-cyan);"></span>
+                      <span class="btn-text" style="font-size: 14px; padding: 6px 20px;"><i class="fa-solid fa-check"></i> 收到</span>
+                    </button>
+                  </div>
+                </div>
+              </div>
+
+              <!-- 底部状态栏 -->
+              <div class="camera-bottom-bar">
+                <span><i class="fa-regular fa-lightbulb"></i> Tips: 保持积极情绪能让能量增长更快哦！</span>
+                <span><i class="fa-regular fa-clock"></i> 本次分析时长: <span id="vhs-timecode">00:00:00</span></span>
+              </div>
+            </div>
+          </div>
+        </main>
+
+        <!-- 底部系统状态栏 -->
+        <footer class="arcade-footer">
+          <div class="fps-counter"><i class="fa-solid fa-microchip"></i> ENGINE FPS: <span id="fps-val">60</span></div>
+          <div class="emoji-counter"><i class="fa-solid fa-face-smile"></i> DENSE: <span id="meteor-count">0</span></div>
+          <div class="status-scroll">
+            <marquee scrollamount="3" id="marquee-text">警报：检测到空气中黄豆 Emo 粒子浓度正在上升！请选择您的悲伤观测器...</marquee>
+          </div>
+        </footer>
+      </div>
+    </div>
+
+    <!-- Vite 加载的主逻辑脚本 -->
+    <script type="module" src="/src/main.js"></script>
+  </body>
+</html>
